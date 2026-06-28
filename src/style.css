@@ -39,6 +39,7 @@ body {
   display: flex;
   flex-direction: column;
   background: radial-gradient(circle at 50% 32%, rgba(45, 73, 88, 0.92), rgba(5, 10, 15, 0.96) 62%);
+  cursor: pointer;
 }
 
 .dice-modal.hidden,
@@ -92,13 +93,17 @@ body {
   font-weight: 800;
 }
 
-.close-btn {
-  width: min(320px, 100%);
-  height: 48px;
-  border: 1px solid rgba(255,255,255,0.22);
-  border-radius: 8px;
-  background: #e6b85f;
-  color: #13211f;
-  font-size: 15px;
+.result-next-action {
+  position: fixed;
+  top: 52%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  color: rgba(248, 250, 252, 0.58);
+  font-size: 17px;
   font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.72);
 }

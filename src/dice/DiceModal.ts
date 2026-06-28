@@ -1,18 +1,22 @@
 import DiceBox from "../../vendor/dice-box/dice-box.es.js"
 
 type RollCallback = (values: number[]) => void
+type CloseCallback = () => void
 
 const EXTERNAL_THEMES = {
   smooth: "https://cdn.jsdelivr.net/npm/@3d-dice/theme-smooth",
+  "smooth-pip": "https://cdn.jsdelivr.net/npm/@3d-dice/theme-smooth-pip",
   gemstone: "https://cdn.jsdelivr.net/npm/@3d-dice/theme-gemstone",
   blueGreenMetal: "https://cdn.jsdelivr.net/npm/@3d-dice/theme-blue-green-metal",
 }
+const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`
 
 export class DiceModal {
   private modalEl: HTMLElement
   private resultEl: HTMLElement
   private diceBox: any = null
   private resultCallback: RollCallback | null = null
+  private closeCallback: CloseCallback | null = null
   private rolling = false
 
   constructor(selector: string) {
@@ -26,7 +30,7 @@ export class DiceModal {
   async init() {
     this.diceBox = new DiceBox({
       container: "#dice-modal-canvas",
-      assetPath: "/assets/",
+      assetPath: ASSET_BASE,
       theme: "smooth",
       themeColor: "#e8f0ff",
       scale: 5.5,
@@ -35,6 +39,7 @@ export class DiceModal {
       friction: 0.78,
       restitution: 0.15,
       externalThemes: EXTERNAL_THEMES,
+      preloadThemes: ["smooth-pip"],
     })
 
     this.diceBox.onRollComplete = (results: any[]) => {
@@ -52,6 +57,10 @@ export class DiceModal {
     this.resultCallback = callback
   }
 
+  onClose(callback: CloseCallback) {
+    this.closeCallback = callback
+  }
+
   roll(count: number) {
     if (!this.diceBox || this.rolling || count <= 0) return
     this.rolling = true
@@ -59,12 +68,15 @@ export class DiceModal {
     this.modalEl.setAttribute("aria-hidden", "false")
     this.resultEl.classList.add("hidden")
     this.resultEl.innerHTML = ""
+    this.modalEl.onclick = null
+    this.modalEl.onpointerdown = null
+    this.modalEl.onpointerup = null
     this.diceBox.clear()
     this.diceBox.show()
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event("resize"))
-      window.setTimeout(() => this.diceBox.roll(`${count}d6`), 120)
+      window.setTimeout(() => this.diceBox.roll(`${count}dpip`), 120)
     })
   }
 
@@ -75,6 +87,10 @@ export class DiceModal {
     this.modalEl.classList.add("hidden")
     this.modalEl.setAttribute("aria-hidden", "true")
     this.resultEl.classList.add("hidden")
+    this.modalEl.onclick = null
+    this.modalEl.onpointerdown = null
+    this.modalEl.onpointerup = null
+    this.closeCallback?.()
   }
 
   private showResult(values: number[]) {
@@ -88,14 +104,26 @@ export class DiceModal {
       valuesWrap.appendChild(die)
     }
 
-    const button = document.createElement("button")
-    button.className = "close-btn"
-    button.type = "button"
-    button.textContent = "ゲームへ戻る"
-    button.addEventListener("click", () => this.close())
+    const nextAction = document.createElement("div")
+    nextAction.className = "result-next-action"
+    nextAction.textContent = "タップしてキープするダイスを選択"
 
     this.resultEl.innerHTML = ""
-    this.resultEl.append(valuesWrap, button)
+    this.resultEl.append(valuesWrap, nextAction)
     this.resultEl.classList.remove("hidden")
+
+    this.modalEl.onpointerdown = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    this.modalEl.onpointerup = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      this.close()
+    }
+    this.modalEl.onclick = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
   }
 }

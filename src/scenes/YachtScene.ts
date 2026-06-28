@@ -22,6 +22,14 @@ type Stats = {
 
 const STORAGE_KEY = "yacht-phaser-stats"
 const FONT = '"Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif'
+const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`
+const GUIDE_CHARACTERS = [
+  {
+    key: "guide-captain",
+    name: "船長",
+    asset: `${ASSET_BASE}characters/captain-die.png`,
+  },
+] as const
 
 export class YachtScene extends Phaser.Scene {
   private diceModal: DiceModal | null = null
@@ -33,15 +41,23 @@ export class YachtScene extends Phaser.Scene {
   private rollCount = 0
   private isFinished = false
   private isRolling = false
+  private resetConfirmOpen = false
+  private inputLockedUntil = 0
   private stats: Stats = { games: 0, best: 0, average: 0, yachts: 0 }
+  private guideCharacter = GUIDE_CHARACTERS[0]
 
   constructor() {
     super({ key: "YachtScene" })
   }
 
+  preload() {
+    GUIDE_CHARACTERS.forEach((character) => this.load.image(character.key, character.asset))
+  }
+
   setDiceModal(diceModal: DiceModal) {
     this.diceModal = diceModal
     diceModal.onResult((values) => this.applyRoll(values))
+    diceModal.onClose(() => this.lockInputBriefly())
   }
 
   create() {
@@ -71,6 +87,7 @@ export class YachtScene extends Phaser.Scene {
     this.drawActions(pad, pad + topH + diceH, width - pad * 2, actionH)
     this.drawScoreSheet(pad, scoreY, width - pad * 2, scoreH)
     this.drawStats(pad, height - statsH - pad, width - pad * 2, statsH)
+    if (this.resetConfirmOpen) this.drawResetConfirm(width, height)
   }
 
   private drawFeltBackground(width: number, height: number) {
@@ -86,12 +103,13 @@ export class YachtScene extends Phaser.Scene {
 
   private drawHeader(x: number, y: number, w: number, h: number) {
     this.panel(x, y, w, h, 0x10201e, 0.9)
-    this.text(x + 14, y + 11, "Yacht Dice", 22, "#fff3d1", "800")
-    this.text(x + 14, y + 36, `Round ${this.round}/13`, 12, "#b8c4c2", "700")
+    this.text(x + 14, y + 8, "Yacht Dice", 22, "#fff3d1", "800")
+    this.text(x + 14, y + 34, `Round ${this.round}/13`, 12, "#b8c4c2", "700")
 
     const score = totalScore(this.board)
-    this.text(x + w - 14, y + 10, `${score}`, 28, "#ffffff", "900", 1)
-    this.text(x + w - 14, y + 40, "SCORE", 11, "#b8c4c2", "800", 1)
+    this.dangerButton(x + w - 156, y + 10, 72, 28, "リセット", () => this.requestReset())
+    this.text(x + w - 14, y + 2, `${score}`, 27, "#ffffff", "900", 1)
+    this.text(x + w - 14, y + 31, "SCORE", 11, "#b8c4c2", "800", 1)
   }
 
   private drawDiceArea(x: number, y: number, w: number, h: number) {
@@ -128,39 +146,74 @@ export class YachtScene extends Phaser.Scene {
   }
 
   private drawActions(x: number, y: number, w: number, h: number) {
-    const rollW = Math.min(250, w * 0.58)
-    const resetW = Math.min(128, w - rollW - 10)
     const by = y + Math.max(6, (h - 48) / 2)
-    this.button(x, by, rollW, 48, this.rollButtonLabel(), this.canRoll(), () => this.roll())
-    this.button(x + rollW + 10, by, resetW, 48, "NEW", true, () => this.resetGame())
+    this.button(x, by, w, 48, this.rollButtonLabel(), this.canRoll(), () => this.roll())
 
     const remain = Math.max(0, 3 - this.rollCount)
-    this.text(x + w - 2, by + 16, `Roll ${this.rollCount}/3  残り${remain}`, 12, "#b8c4c2", "800", 1)
+    this.text(x + w - 12, by + 16, `${this.rollCount}/3  残り${remain}`, 12, this.canRoll() ? "#13211f" : "#d0d4d2", "900", 1)
   }
 
   private drawScoreSheet(x: number, y: number, w: number, h: number) {
     this.panel(x, y, w, h, 0x0e1b1b, 0.88)
     const upper = CATEGORIES.filter((category) => category.section === "upper")
     const lower = CATEGORIES.filter((category) => category.section === "lower")
-    const titleH = 26
-    const totalsH = 48
-    const rowH = Math.max(24, Math.min(34, (h - titleH - totalsH) / 8))
-    const colGap = 8
-    const colW = (w - 22 - colGap) / 2
-    const leftX = x + 11
-    const rightX = leftX + colW + colGap
-    const topY = y + titleH
+    const titleH = 29
+    const innerPad = 10
+    const columnGap = 10
+    const guideW = Math.max(100, Math.min(220, w * 0.34))
+    const sheetW = w - innerPad * 2 - columnGap - guideW
+    const sheetX = x + innerPad
+    const guideX = sheetX + sheetW + columnGap
+    const contentY = y + titleH
+    const contentH = h - titleH - innerPad
+    const sectionTitleH = 20
+    const totalH = 25
+    const sectionGap = 6
+    const fixedH = sectionTitleH * 2 + totalH * 2 + sectionGap
+    const rowH = Math.max(20, Math.min(32, (contentH - fixedH) / (upper.length + lower.length)))
 
-    this.text(x + 12, y + 7, "Score Sheet", 14, "#fff3d1", "900")
-    this.text(x + w - 12, y + 7, "上段63点で +35", 11, "#b8c4c2", "800", 1)
-    this.drawCategoryColumn(leftX, topY, colW, rowH, upper)
-    this.drawCategoryColumn(rightX, topY, colW, rowH, lower)
+    this.text(x + 12, y + 7, "スコアシート", 14, "#fff3d1", "900")
+    this.drawCategorySection(
+      sheetX,
+      contentY,
+      sheetW,
+      rowH,
+      "数字",
+      "63点でボーナス +35",
+      `数字合計 ${upperTotal(this.board)}  /  ボーナス ${upperBonus(this.board)}`,
+      upper,
+    )
 
-    const totalY = y + h - totalsH + 6
-    const upperText = `上段 ${upperTotal(this.board)} + ${upperBonus(this.board)}`
-    const lowerText = `下段 ${lowerTotal(this.board)}`
-    this.badge(leftX, totalY, colW, 32, upperText)
-    this.badge(rightX, totalY, colW, 32, lowerText)
+    const lowerY = contentY + sectionTitleH + upper.length * rowH + totalH + sectionGap
+    this.drawCategorySection(
+      sheetX,
+      lowerY,
+      sheetW,
+      rowH,
+      "役",
+      "",
+      `役の合計 ${lowerTotal(this.board)}`,
+      lower,
+    )
+    this.drawGuide(guideX, contentY, guideW, contentH)
+  }
+
+  private drawCategorySection(
+    x: number,
+    y: number,
+    w: number,
+    rowH: number,
+    title: string,
+    note: string,
+    total: string,
+    categories: typeof CATEGORIES,
+  ) {
+    this.text(x + 2, y + 2, title, 13, "#fff3d1", "900")
+    if (note) this.text(x + w - 2, y + 3, note, w < 190 ? 9 : 10, "#b8c4c2", "800", 1)
+
+    const rowsY = y + 20
+    this.drawCategoryColumn(x, rowsY, w, rowH, categories)
+    this.badge(x, rowsY + categories.length * rowH, w, 23, total)
   }
 
   private drawCategoryColumn(
@@ -177,21 +230,30 @@ export class YachtScene extends Phaser.Scene {
       const selectable = saved === null && this.rollCount > 0 && !this.isFinished
       const preview = selectable ? calculateScore(category.key, this.dice) : null
       const best = selectable && bestAvailable(this.board, this.dice)?.key === category.key
-      const fill = saved !== null ? 0x18352f : best ? 0x314229 : 0x122423
-      const alpha = selectable || saved !== null ? 0.96 : 0.48
+      const isSaved = saved !== null
+      const fill = isSaved ? 0x243b4a : best ? 0x4b3d1e : selectable ? 0x153b32 : 0x101b1b
+      const border = isSaved ? 0x73a9c4 : best ? 0xf0c968 : selectable ? 0x54d6a3 : 0x87918f
+      const borderAlpha = isSaved ? 0.72 : best ? 0.95 : selectable ? 0.5 : 0.18
+      const marker = isSaved ? 0x73a9c4 : best ? 0xf0c968 : selectable ? 0x54d6a3 : 0x596461
 
       const row = this.add.graphics()
-      row.fillStyle(fill, alpha)
-      row.lineStyle(1, best ? 0xe6b85f : 0xffffff, best ? 0.62 : 0.1)
+      row.fillStyle(fill, isSaved || selectable ? 0.98 : 0.58)
+      row.lineStyle(best ? 2 : 1, border, borderAlpha)
       row.fillRoundedRect(x, cy, w, rowH - 4, 6)
       row.strokeRoundedRect(x, cy, w, rowH - 4, 6)
+      row.fillStyle(marker, isSaved || selectable ? 1 : 0.35)
+      row.fillRoundedRect(x + 2, cy + 3, 4, rowH - 10, 2)
       this.layer.add(row)
 
       const labelSize = w < 170 ? 10 : 12
-      this.text(x + 8, cy + 6, category.label, labelSize, "#edf7f4", "800")
-      const valueText = saved !== null ? String(saved) : preview !== null ? `(${preview})` : "-"
-      const valueColor = saved !== null ? "#fff3d1" : preview !== null ? "#90f0c2" : "#74827f"
-      this.text(x + w - 8, cy + 6, valueText, 13, valueColor, "900", 1)
+      const labelY = cy + Math.max(3, (rowH - labelSize - 4) / 2)
+      const icon = isSaved ? "✓" : best ? "★" : ""
+      const labelColor = isSaved ? "#e6f5ff" : best ? "#fff1b8" : selectable ? "#e7fff5" : "#8c9996"
+      if (icon) this.text(x + 10, labelY - 1, icon, labelSize + 1, isSaved ? "#9dd9f5" : "#f0c968", "900")
+      this.text(x + (icon ? 27 : 11), labelY, category.label, labelSize, labelColor, "800")
+      const valueText = isSaved ? String(saved) : preview !== null ? `(${preview})` : "—"
+      const valueColor = isSaved ? "#ffffff" : best ? "#ffe38b" : preview !== null ? "#7ce9bb" : "#66726f"
+      this.text(x + w - 8, labelY, valueText, 13, valueColor, "900", 1)
 
       if (selectable) {
         const zone = this.add.zone(x, cy, w, rowH - 4).setOrigin(0).setInteractive({ useHandCursor: true })
@@ -199,6 +261,62 @@ export class YachtScene extends Phaser.Scene {
         this.layer.add(zone)
       }
     }
+  }
+
+  private drawGuide(x: number, y: number, w: number, h: number) {
+    const divider = this.add.graphics()
+    divider.lineStyle(1, 0xffffff, 0.12)
+    divider.lineBetween(x - 5, y + 3, x - 5, y + h - 3)
+    this.layer.add(divider)
+
+    const message = this.guideMessage()
+    const bubbleH = Math.min(112, Math.max(84, h * 0.24))
+    const bubble = this.add.graphics()
+    bubble.fillStyle(0xf7f0df, 0.98)
+    bubble.lineStyle(2, 0xe6b85f, 0.7)
+    bubble.fillRoundedRect(x, y + 3, w, bubbleH, 8)
+    bubble.strokeRoundedRect(x, y + 3, w, bubbleH, 8)
+    bubble.fillStyle(0xf7f0df, 0.98)
+    bubble.fillTriangle(x + w * 0.42, y + bubbleH + 2, x + w * 0.58, y + bubbleH + 2, x + w * 0.5, y + bubbleH + 15)
+    this.layer.add(bubble)
+
+    this.text(x + w / 2, y + 13, message.title, w < 125 ? 9 : 10, "#806225", "900", 0.5)
+    const body = this.add
+      .text(x + w / 2, y + 34, message.body, {
+        fontFamily: FONT,
+        fontSize: `${w < 125 ? 11 : 13}px`,
+        fontStyle: "900",
+        color: "#172421",
+        align: "center",
+        lineSpacing: 2,
+        wordWrap: { width: w - 16, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0)
+    this.layer.add(body)
+
+    const characterSpace = Math.max(72, h - bubbleH - 24)
+    const characterSize = Math.min(w * 1.28, characterSpace, 190)
+    const captain = this.add
+      .image(x + w / 2, y + h - 2, this.guideCharacter.key)
+      .setOrigin(0.5, 1)
+      .setDisplaySize(characterSize, characterSize)
+    this.layer.add(captain)
+  }
+
+  private guideMessage() {
+    if (this.isFinished) {
+      return { title: "航海完了！", body: `最終スコア\n${totalScore(this.board)}点` }
+    }
+    if (this.isRolling) {
+      return { title: "ダイス航海中", body: "いい目が出るか\n見届けよう！" }
+    }
+    if (this.rollCount === 0) {
+      return { title: `${this.guideCharacter.name}のヒント`, body: "まずはダイスを\n振ってみよう！" }
+    }
+
+    const best = bestAvailable(this.board, this.dice)
+    if (!best) return { title: `${this.guideCharacter.name}のヒント`, body: "役を選んで\n確定しよう！" }
+    return { title: "現在の最高得点", body: `${best.label}\n${best.score}点` }
   }
 
   private drawStats(x: number, y: number, w: number, h: number) {
@@ -218,7 +336,7 @@ export class YachtScene extends Phaser.Scene {
   }
 
   private roll() {
-    if (!this.canRoll() || !this.diceModal) return
+    if (this.isInputLocked() || this.resetConfirmOpen || !this.canRoll() || !this.diceModal) return
     const rollIndexes = this.dice.map((_, i) => i).filter((i) => !this.held[i])
     if (rollIndexes.length === 0) return
     this.isRolling = true
@@ -237,13 +355,13 @@ export class YachtScene extends Phaser.Scene {
   }
 
   private toggleHold(index: number) {
-    if (this.rollCount === 0 || this.isFinished || this.isRolling) return
+    if (this.isInputLocked() || this.resetConfirmOpen || this.rollCount === 0 || this.isFinished || this.isRolling) return
     this.held[index] = !this.held[index]
     this.redraw()
   }
 
   private selectCategory(category: CategoryKey) {
-    if (this.board[category] !== null || this.rollCount === 0 || this.isFinished) return
+    if (this.isInputLocked() || this.resetConfirmOpen || this.board[category] !== null || this.rollCount === 0 || this.isFinished) return
     const score = calculateScore(category, this.dice)
     this.board[category] = score
     if (category === "yacht" && score === 50) this.stats.yachts += 1
@@ -282,23 +400,43 @@ export class YachtScene extends Phaser.Scene {
     this.rollCount = 0
     this.isFinished = false
     this.isRolling = false
+    this.resetConfirmOpen = false
+    this.redraw()
+  }
+
+  private requestReset() {
+    if (this.isInputLocked() || this.isRolling || this.resetConfirmOpen) return
+    this.resetConfirmOpen = true
+    this.redraw()
+  }
+
+  private cancelReset() {
+    this.resetConfirmOpen = false
     this.redraw()
   }
 
   private canRoll() {
-    return !this.isRolling && !this.isFinished && this.rollCount < 3 && this.held.some((held) => !held)
+    return !this.isInputLocked() && !this.resetConfirmOpen && !this.isRolling && !this.isFinished && this.rollCount < 3 && this.held.some((held) => !held)
+  }
+
+  private lockInputBriefly() {
+    this.inputLockedUntil = Date.now() + 450
+  }
+
+  private isInputLocked() {
+    return Date.now() < this.inputLockedUntil
   }
 
   private rollButtonLabel() {
-    if (this.isFinished) return "FINISHED"
-    if (this.isRolling) return "ROLLING..."
-    if (this.rollCount === 0) return "ROLL DICE"
-    return "REROLL"
+    if (this.isFinished) return "ゲーム終了"
+    if (this.isRolling) return "ダイスを振っています..."
+    if (this.rollCount === 0) return "ダイスを振る"
+    return "振り直す"
   }
 
   private messageText() {
     if (this.isFinished) return `ゲーム終了  最終スコア ${totalScore(this.board)}`
-    if (this.rollCount === 0) return "ROLL DICE でラウンド開始"
+    if (this.rollCount === 0) return "ダイスを振ってラウンド開始"
     const best = bestAvailable(this.board, this.dice)
     return best ? `タップでキープ / おすすめ: ${best.label} ${best.score}点` : "役を選んで確定"
   }
@@ -323,12 +461,12 @@ export class YachtScene extends Phaser.Scene {
 
   private badge(x: number, y: number, w: number, h: number, label: string) {
     const g = this.add.graphics()
-    g.fillStyle(0x1a302d, 0.96)
-    g.lineStyle(1, 0xe6b85f, 0.26)
+    g.fillStyle(0x28343e, 1)
+    g.lineStyle(2, 0xe6b85f, 0.82)
     g.fillRoundedRect(x, y, w, h, 6)
     g.strokeRoundedRect(x, y, w, h, 6)
     this.layer.add(g)
-    this.text(x + w / 2, y + 9, label, 12, "#fff3d1", "900", 0.5)
+    this.text(x + w / 2, y + 6, label, 12, "#ffffff", "900", 0.5)
   }
 
   private button(x: number, y: number, w: number, h: number, label: string, enabled: boolean, onTap: () => void) {
@@ -344,6 +482,64 @@ export class YachtScene extends Phaser.Scene {
       zone.on("pointerdown", onTap)
       this.layer.add(zone)
     }
+  }
+
+  private dangerButton(x: number, y: number, w: number, h: number, label: string, onTap: () => void) {
+    const g = this.add.graphics()
+    g.fillStyle(0x5d2728, 0.92)
+    g.lineStyle(1, 0xffb4a6, 0.22)
+    g.fillRoundedRect(x, y, w, h, 7)
+    g.strokeRoundedRect(x, y, w, h, 7)
+    this.layer.add(g)
+    this.text(x + w / 2, y + h / 2 - 8, label, 11, "#ffd9d3", "900", 0.5)
+    const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true })
+    zone.on("pointerdown", onTap)
+    this.layer.add(zone)
+  }
+
+  private drawResetConfirm(width: number, height: number) {
+    const veil = this.add.graphics()
+    veil.fillStyle(0x030707, 0.72)
+    veil.fillRect(0, 0, width, height)
+    this.layer.add(veil)
+
+    const w = Math.min(330, width - 38)
+    const h = 170
+    const x = (width - w) / 2
+    const y = (height - h) / 2
+    this.panel(x, y, w, h, 0x152321, 0.98)
+    this.text(x + w / 2, y + 24, "リセットしますか？", 18, "#fff3d1", "900", 0.5)
+    this.text(x + w / 2, y + 58, "現在のゲーム進行は失われます", 13, "#b8c4c2", "800", 0.5)
+
+    const buttonW = (w - 34) / 2
+    this.neutralButton(x + 12, y + 108, buttonW, 42, "続ける", () => this.cancelReset())
+    this.confirmDangerButton(x + 22 + buttonW, y + 108, buttonW, 42, "リセット", () => this.resetGame())
+  }
+
+  private neutralButton(x: number, y: number, w: number, h: number, label: string, onTap: () => void) {
+    const g = this.add.graphics()
+    g.fillStyle(0x2c403c, 1)
+    g.lineStyle(1, 0xffffff, 0.14)
+    g.fillRoundedRect(x, y, w, h, 8)
+    g.strokeRoundedRect(x, y, w, h, 8)
+    this.layer.add(g)
+    this.text(x + w / 2, y + h / 2 - 10, label, 14, "#eff8f5", "900", 0.5)
+    const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true })
+    zone.on("pointerdown", onTap)
+    this.layer.add(zone)
+  }
+
+  private confirmDangerButton(x: number, y: number, w: number, h: number, label: string, onTap: () => void) {
+    const g = this.add.graphics()
+    g.fillStyle(0xb9433d, 1)
+    g.lineStyle(1, 0xffe2dc, 0.24)
+    g.fillRoundedRect(x, y, w, h, 8)
+    g.strokeRoundedRect(x, y, w, h, 8)
+    this.layer.add(g)
+    this.text(x + w / 2, y + h / 2 - 10, label, 14, "#fff8f4", "900", 0.5)
+    const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true })
+    zone.on("pointerdown", onTap)
+    this.layer.add(zone)
   }
 
   private text(
