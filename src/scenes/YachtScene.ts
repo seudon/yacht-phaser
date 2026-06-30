@@ -73,12 +73,15 @@ export class YachtScene extends Phaser.Scene {
     const width = this.scale.width
     const height = this.scale.height
     const compact = width < 720
-    const pad = compact ? 12 : 20
-    const topH = compact ? 48 : 62
-    const diceH = compact ? 122 : 155
-    const actionH = compact ? 58 : 68
-    const statsH = compact ? 48 : 58
-    const scoreY = pad + topH + diceH + actionH + 8
+    const short = compact && height < 760
+    const roomy = !compact && height >= 860
+    const pad = short ? 8 : compact ? 10 : 20
+    const topH = short ? 44 : compact ? 47 : 60
+    const diceH = short ? 102 : compact ? 116 : roomy ? 128 : 124
+    const actionH = short ? 48 : compact ? 54 : 60
+    const statsH = short ? 42 : compact ? 46 : 56
+    const sectionGap = short ? 5 : 8
+    const scoreY = pad + topH + diceH + actionH + sectionGap
     const scoreH = height - scoreY - statsH - pad
 
     this.drawFeltBackground(width, height)
@@ -103,22 +106,24 @@ export class YachtScene extends Phaser.Scene {
 
   private drawHeader(x: number, y: number, w: number, h: number) {
     this.panel(x, y, w, h, 0x10201e, 0.9)
-    this.text(x + 14, y + 8, "Yacht Dice", 22, "#fff3d1", "800")
-    this.text(x + 14, y + 34, `Round ${this.round}/13`, 12, "#b8c4c2", "700")
+    const tight = h < 46
+    this.text(x + 14, y + (tight ? 6 : 8), "Yacht Dice", tight ? 20 : 22, "#fff3d1", "800")
+    this.text(x + 14, y + (tight ? 30 : 34), `Round ${this.round}/13`, 12, "#b8c4c2", "700")
 
     const score = totalScore(this.board)
-    this.dangerButton(x + w - 156, y + 10, 72, 28, "リセット", () => this.requestReset())
-    this.text(x + w - 14, y + 2, `${score}`, 27, "#ffffff", "900", 1)
-    this.text(x + w - 14, y + 31, "SCORE", 11, "#b8c4c2", "800", 1)
+    this.dangerButton(x + w - 156, y + (tight ? 8 : 10), 72, tight ? 26 : 28, "リセット", () => this.requestReset())
+    this.text(x + w - 14, y + (tight ? 0 : 2), `${score}`, tight ? 25 : 27, "#ffffff", "900", 1)
+    this.text(x + w - 14, y + (tight ? 28 : 31), "SCORE", 11, "#b8c4c2", "800", 1)
   }
 
   private drawDiceArea(x: number, y: number, w: number, h: number) {
     this.panel(x, y, w, h, 0x0c1919, 0.78)
+    const tight = h < 110
     const availableW = w - 24
     const gap = Math.min(10, availableW * 0.02)
-    const size = Math.min(70, (availableW - gap * 4) / 5, h - 45)
+    const size = Math.min(tight ? 60 : 70, (availableW - gap * 4) / 5, h - (tight ? 36 : 45))
     const startX = x + w / 2 - (size * 5 + gap * 4) / 2
-    const diceY = y + 15
+    const diceY = y + (tight ? 9 : 15)
 
     for (let i = 0; i < 5; i++) {
       const dx = startX + i * (size + gap)
@@ -138,46 +143,53 @@ export class YachtScene extends Phaser.Scene {
       zone.on("pointerdown", () => this.toggleHold(i))
       this.layer.add(zone)
 
-      if (held) this.text(dx + size / 2, diceY + size + 5, "KEEP", 10, "#ffdf88", "900", 0.5)
+      if (held) this.text(dx + size / 2, diceY + size + (tight ? 2 : 5), "KEEP", tight ? 9 : 10, "#ffdf88", "900", 0.5)
     }
 
     const message = this.messageText()
-    this.text(x + w / 2, y + h - 22, message, 13, "#d7e0dc", "700", 0.5)
+    this.text(x + w / 2, y + h - (tight ? 17 : 22), message, tight ? 11 : 13, "#d7e0dc", "700", 0.5)
   }
 
   private drawActions(x: number, y: number, w: number, h: number) {
-    const by = y + Math.max(6, (h - 48) / 2)
-    this.button(x, by, w, 48, this.rollButtonLabel(), this.canRoll(), () => this.roll())
+    const buttonH = h < 52 ? 42 : 48
+    const by = y + Math.max(3, (h - buttonH) / 2)
+    this.button(x, by, w, buttonH, this.rollButtonLabel(), this.canRoll(), () => this.roll())
 
     const remain = Math.max(0, 3 - this.rollCount)
-    this.text(x + w - 12, by + 16, `${this.rollCount}/3  残り${remain}`, 12, this.canRoll() ? "#13211f" : "#d0d4d2", "900", 1)
+    this.text(x + w - 12, by + buttonH / 2 - 8, `${this.rollCount}/3  残り${remain}`, h < 52 ? 11 : 12, this.canRoll() ? "#13211f" : "#d0d4d2", "900", 1)
   }
 
   private drawScoreSheet(x: number, y: number, w: number, h: number) {
     this.panel(x, y, w, h, 0x0e1b1b, 0.88)
     const upper = CATEGORIES.filter((category) => category.section === "upper")
     const lower = CATEGORIES.filter((category) => category.section === "lower")
-    const titleH = 29
-    const innerPad = 10
-    const columnGap = 10
+    const compact = w < 720
+    const tight = compact && h < 420
+    const titleH = tight ? 23 : compact ? 26 : 30
+    const innerPad = tight ? 6 : compact ? 8 : 12
+    const columnGap = tight ? 6 : 10
     const guideW = Math.max(100, Math.min(220, w * 0.34))
     const sheetW = w - innerPad * 2 - columnGap - guideW
     const sheetX = x + innerPad
     const guideX = sheetX + sheetW + columnGap
     const contentY = y + titleH
     const contentH = h - titleH - innerPad
-    const sectionTitleH = 20
-    const totalH = 25
-    const sectionGap = 6
+    const sectionTitleH = tight ? 17 : 20
+    const totalH = tight ? 20 : 25
+    const sectionGap = tight ? 3 : 6
     const fixedH = sectionTitleH * 2 + totalH * 2 + sectionGap
-    const rowH = Math.max(20, Math.min(32, (contentH - fixedH) / (upper.length + lower.length)))
+    const minRowH = tight ? 17 : compact ? 19 : 24
+    const maxRowH = compact ? 30 : 42
+    const rowH = Math.max(minRowH, Math.min(maxRowH, (contentH - fixedH) / (upper.length + lower.length)))
 
-    this.text(x + 12, y + 7, "スコアシート", 14, "#fff3d1", "900")
+    this.text(x + 12, y + (tight ? 5 : 7), "スコアシート", tight ? 13 : 14, "#fff3d1", "900")
     this.drawCategorySection(
       sheetX,
       contentY,
       sheetW,
       rowH,
+      sectionTitleH,
+      totalH,
       "数字",
       "63点でボーナス +35",
       `数字合計 ${upperTotal(this.board)}  /  ボーナス ${upperBonus(this.board)}`,
@@ -190,6 +202,8 @@ export class YachtScene extends Phaser.Scene {
       lowerY,
       sheetW,
       rowH,
+      sectionTitleH,
+      totalH,
       "役",
       "",
       `役の合計 ${lowerTotal(this.board)}`,
@@ -203,17 +217,20 @@ export class YachtScene extends Phaser.Scene {
     y: number,
     w: number,
     rowH: number,
+    titleH: number,
+    totalH: number,
     title: string,
     note: string,
     total: string,
     categories: typeof CATEGORIES,
   ) {
-    this.text(x + 2, y + 2, title, 13, "#fff3d1", "900")
-    if (note) this.text(x + w - 2, y + 3, note, w < 190 ? 9 : 10, "#b8c4c2", "800", 1)
+    const tight = rowH < 19
+    this.text(x + 2, y + (tight ? 1 : 2), title, tight ? 12 : 13, "#fff3d1", "900")
+    if (note) this.text(x + w - 2, y + (tight ? 2 : 3), note, w < 190 ? 8 : 10, "#b8c4c2", "800", 1)
 
-    const rowsY = y + 20
+    const rowsY = y + titleH
     this.drawCategoryColumn(x, rowsY, w, rowH, categories)
-    this.badge(x, rowsY + categories.length * rowH, w, 23, total)
+    this.badge(x, rowsY + categories.length * rowH, w, totalH - 2, total)
   }
 
   private drawCategoryColumn(
@@ -466,7 +483,7 @@ export class YachtScene extends Phaser.Scene {
     g.fillRoundedRect(x, y, w, h, 6)
     g.strokeRoundedRect(x, y, w, h, 6)
     this.layer.add(g)
-    this.text(x + w / 2, y + 6, label, 12, "#ffffff", "900", 0.5)
+    this.text(x + w / 2, y + Math.max(3, (h - 12) / 2), label, h < 21 ? 11 : 12, "#ffffff", "900", 0.5)
   }
 
   private button(x: number, y: number, w: number, h: number, label: string, enabled: boolean, onTap: () => void) {
