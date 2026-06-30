@@ -10,6 +10,8 @@ const EXTERNAL_THEMES = {
   blueGreenMetal: "https://cdn.jsdelivr.net/npm/@3d-dice/theme-blue-green-metal",
 }
 const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`
+const CLOSE_SHIELD_MS = 560
+const ABSORBED_EVENTS = ["pointerdown", "pointerup", "click", "touchstart", "touchmove", "touchend", "contextmenu"] as const
 
 export class DiceModal {
   private modalEl: HTMLElement
@@ -18,6 +20,9 @@ export class DiceModal {
   private resultCallback: RollCallback | null = null
   private closeCallback: CloseCallback | null = null
   private rolling = false
+  private readyToClose = false
+  private closing = false
+  private closeTimer: number | null = null
 
   constructor(selector: string) {
     const modalEl = document.querySelector<HTMLElement>(selector)
@@ -25,6 +30,9 @@ export class DiceModal {
     if (!modalEl || !resultEl) throw new Error("Dice modal elements are missing")
     this.modalEl = modalEl
     this.resultEl = resultEl
+    ABSORBED_EVENTS.forEach((eventName) => {
+      this.modalEl.addEventListener(eventName, this.absorbModalEvent, { capture: true, passive: false })
+    })
   }
 
   async init() {
@@ -64,13 +72,17 @@ export class DiceModal {
   roll(count: number) {
     if (!this.diceBox || this.rolling || count <= 0) return
     this.rolling = true
+    this.readyToClose = false
+    this.closing = false
+    if (this.closeTimer !== null) {
+      window.clearTimeout(this.closeTimer)
+      this.closeTimer = null
+    }
+    this.modalEl.classList.remove("closing")
     this.modalEl.classList.remove("hidden")
     this.modalEl.setAttribute("aria-hidden", "false")
     this.resultEl.classList.add("hidden")
     this.resultEl.innerHTML = ""
-    this.modalEl.onclick = null
-    this.modalEl.onpointerdown = null
-    this.modalEl.onpointerup = null
     this.diceBox.clear()
     this.diceBox.show()
 
@@ -81,16 +93,21 @@ export class DiceModal {
   }
 
   private close() {
-    if (!this.diceBox) return
+    if (!this.diceBox || this.closing) return
+    this.closing = true
+    this.readyToClose = false
+    this.closeCallback?.()
     this.diceBox.clear()
     this.diceBox.hide()
-    this.modalEl.classList.add("hidden")
-    this.modalEl.setAttribute("aria-hidden", "true")
     this.resultEl.classList.add("hidden")
-    this.modalEl.onclick = null
-    this.modalEl.onpointerdown = null
-    this.modalEl.onpointerup = null
-    this.closeCallback?.()
+    this.modalEl.classList.add("closing")
+    this.modalEl.setAttribute("aria-hidden", "true")
+    this.closeTimer = window.setTimeout(() => {
+      this.modalEl.classList.add("hidden")
+      this.modalEl.classList.remove("closing")
+      this.closing = false
+      this.closeTimer = null
+    }, CLOSE_SHIELD_MS)
   }
 
   private showResult(values: number[]) {
@@ -111,19 +128,16 @@ export class DiceModal {
     this.resultEl.innerHTML = ""
     this.resultEl.append(valuesWrap, nextAction)
     this.resultEl.classList.remove("hidden")
+    this.readyToClose = true
+  }
 
-    this.modalEl.onpointerdown = (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    }
-    this.modalEl.onpointerup = (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      this.close()
-    }
-    this.modalEl.onclick = (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    }
+  private absorbModalEvent = (event: Event) => {
+    if (this.modalEl.classList.contains("hidden")) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+
+    if (!this.readyToClose) return
+    if (event.type === "pointerup" || event.type === "touchend" || event.type === "click") this.close()
   }
 }

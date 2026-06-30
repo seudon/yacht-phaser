@@ -420,7 +420,7 @@ export class YachtScene extends Phaser.Scene {
   }
 
   private lockInputBriefly() {
-    this.inputLockedUntil = Date.now() + 450
+    this.inputLockedUntil = Date.now() + 750
   }
 
   private isInputLocked() {

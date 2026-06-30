@@ -47,6 +47,16 @@ body {
   display: none;
 }
 
+.dice-modal.closing {
+  background: transparent;
+  cursor: default;
+}
+
+.dice-modal.closing .dice-modal-canvas,
+.dice-modal.closing .dice-modal-result {
+  opacity: 0;
+}
+
 .dice-modal-canvas {
   flex: 1;
   min-height: 0;
