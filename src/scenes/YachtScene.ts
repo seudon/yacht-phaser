@@ -177,7 +177,7 @@ export class YachtScene extends Phaser.Scene {
     const contentY = y + titleH
     const contentH = h - titleH - innerPad
     const sectionTitleH = tight ? 17 : tall ? 22 : 20
-    const totalH = tight ? 20 : tall ? 28 : 25
+    const totalH = tight ? 20 : tall ? 36 : 25
     const sectionGap = tight ? 3 : tall ? 8 : 6
     const fixedH = sectionTitleH * 2 + totalH * 2 + sectionGap
     const minRowH = tight ? 17 : compact ? 19 : 24
@@ -480,13 +480,15 @@ export class YachtScene extends Phaser.Scene {
   }
 
   private badge(x: number, y: number, w: number, h: number, label: string) {
+    const roomy = h >= 30
     const g = this.add.graphics()
     g.fillStyle(0x28343e, 1)
     g.lineStyle(2, 0xe6b85f, 0.82)
-    g.fillRoundedRect(x, y, w, h, 6)
-    g.strokeRoundedRect(x, y, w, h, 6)
+    g.fillRoundedRect(x, y, w, h, roomy ? 8 : 6)
+    g.strokeRoundedRect(x, y, w, h, roomy ? 8 : 6)
     this.layer.add(g)
-    this.text(x + w / 2, y + Math.max(3, (h - 12) / 2), label, h < 21 ? 11 : 12, "#ffffff", "900", 0.5)
+    const size = h < 21 ? 11 : roomy ? 14 : 12
+    this.text(x + w / 2, y + Math.max(3, (h - size) / 2 - 1), label, size, "#ffffff", "900", 0.5)
   }
 
   private button(x: number, y: number, w: number, h: number, label: string, enabled: boolean, onTap: () => void) {
