@@ -73,13 +73,14 @@ export class YachtScene extends Phaser.Scene {
     const width = this.scale.width
     const height = this.scale.height
     const compact = width < 720
-    const short = compact && height < 760
-    const roomy = !compact && height >= 860
+    const short = height < 760
+    const tall = height >= 860
+    const generous = height >= 980
     const pad = short ? 8 : compact ? 10 : 20
-    const topH = short ? 44 : compact ? 47 : 60
-    const diceH = short ? 102 : compact ? 116 : roomy ? 128 : 124
-    const actionH = short ? 48 : compact ? 54 : 60
-    const statsH = short ? 42 : compact ? 46 : 56
+    const topH = short ? 44 : compact ? 47 : tall ? 54 : 60
+    const diceH = short ? 102 : compact ? 116 : generous ? 104 : tall ? 110 : 124
+    const actionH = short ? 48 : compact ? 54 : tall ? 52 : 60
+    const statsH = short ? 42 : compact ? 46 : tall ? 52 : 56
     const sectionGap = short ? 5 : 8
     const scoreY = pad + topH + diceH + actionH + sectionGap
     const scoreH = height - scoreY - statsH - pad
@@ -164,9 +165,10 @@ export class YachtScene extends Phaser.Scene {
     const upper = CATEGORIES.filter((category) => category.section === "upper")
     const lower = CATEGORIES.filter((category) => category.section === "lower")
     const compact = w < 720
-    const tight = compact && h < 420
+    const tight = h < 420
+    const tall = h >= 560
     const titleH = tight ? 23 : compact ? 26 : 30
-    const innerPad = tight ? 6 : compact ? 8 : 12
+    const innerPad = tight ? 6 : compact ? 8 : tall ? 14 : 12
     const columnGap = tight ? 6 : 10
     const guideW = Math.max(100, Math.min(220, w * 0.34))
     const sheetW = w - innerPad * 2 - columnGap - guideW
@@ -174,12 +176,12 @@ export class YachtScene extends Phaser.Scene {
     const guideX = sheetX + sheetW + columnGap
     const contentY = y + titleH
     const contentH = h - titleH - innerPad
-    const sectionTitleH = tight ? 17 : 20
-    const totalH = tight ? 20 : 25
-    const sectionGap = tight ? 3 : 6
+    const sectionTitleH = tight ? 17 : tall ? 22 : 20
+    const totalH = tight ? 20 : tall ? 28 : 25
+    const sectionGap = tight ? 3 : tall ? 8 : 6
     const fixedH = sectionTitleH * 2 + totalH * 2 + sectionGap
     const minRowH = tight ? 17 : compact ? 19 : 24
-    const maxRowH = compact ? 30 : 42
+    const maxRowH = compact ? 30 : tall ? 58 : 42
     const rowH = Math.max(minRowH, Math.min(maxRowH, (contentH - fixedH) / (upper.length + lower.length)))
 
     this.text(x + 12, y + (tight ? 5 : 7), "スコアシート", tight ? 13 : 14, "#fff3d1", "900")
@@ -262,7 +264,8 @@ export class YachtScene extends Phaser.Scene {
       row.fillRoundedRect(x + 2, cy + 3, 4, rowH - 10, 2)
       this.layer.add(row)
 
-      const labelSize = w < 170 ? 10 : 12
+      const roomy = rowH >= 34
+      const labelSize = w < 170 ? 10 : roomy ? 14 : 12
       const labelY = cy + Math.max(3, (rowH - labelSize - 4) / 2)
       const icon = isSaved ? "✓" : best ? "★" : ""
       const labelColor = isSaved ? "#e6f5ff" : best ? "#fff1b8" : selectable ? "#e7fff5" : "#8c9996"
@@ -270,7 +273,7 @@ export class YachtScene extends Phaser.Scene {
       this.text(x + (icon ? 27 : 11), labelY, category.label, labelSize, labelColor, "800")
       const valueText = isSaved ? String(saved) : preview !== null ? `(${preview})` : "—"
       const valueColor = isSaved ? "#ffffff" : best ? "#ffe38b" : preview !== null ? "#7ce9bb" : "#66726f"
-      this.text(x + w - 8, labelY, valueText, 13, valueColor, "900", 1)
+      this.text(x + w - 8, labelY - (roomy ? 1 : 0), valueText, roomy ? 15 : 13, valueColor, "900", 1)
 
       if (selectable) {
         const zone = this.add.zone(x, cy, w, rowH - 4).setOrigin(0).setInteractive({ useHandCursor: true })
